@@ -1,0 +1,21 @@
+{
+    "name": "xo",
+    "commands": [
+        {
+            "name": "run",
+            "cmd": "go run main.go",
+            "env": [],
+            "help": "run the xo project"
+        },
+        {
+            "name": "install",
+            "cmd": "go build -o xo main.go && sudo mv xo /usr/local/bin/xo && chmod +x /usr/local/bin/xo",
+            "help": "build and install the xo binary in your PATH"
+        },
+        {
+            "name": "pack",
+            "cmd": "go build -o xo main.go",
+            "help": "pack xo binary for release"
+        }
+    ]
+}
