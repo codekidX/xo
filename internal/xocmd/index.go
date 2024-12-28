@@ -52,20 +52,29 @@ func checkAndRunProjectCommand(root *cobra.Command, s *store.Store) bool {
 	if err != nil && projectNameOrCommand.Use == root.Use {
 		// a command must have 1=project_name, 2=command_name, we can ignore 0 because it will be the
 		// bin_name=xo because cobra is not handling these args for us!
-		if len(os.Args) < 3 {
+		if len(os.Args) < 2 {
 			fmt.Println("not enough argument to run xo command.")
 			return true
 		}
 
 		projectName := os.Args[1]
-		commandName := os.Args[2]
-		commandMap := s.GetCommands()
 
 		// check if project exists in workspace
+		commandMap := s.GetCommands()
 		if _, ok := commandMap[projectName]; !ok {
 			fmt.Printf("no such project: %s\n", projectName)
 			return true
 		}
+
+		projectPath := s.GetProjects()[projectName]
+
+		if len(os.Args) == 2 {
+			// this means that only project name is mentioned
+			fmt.Print(projectPath)
+			return true
+		}
+
+		commandName := os.Args[2]
 
 		// check if command exists in project
 		if _, ok := commandMap[projectName][commandName]; !ok {
@@ -74,7 +83,6 @@ func checkAndRunProjectCommand(root *cobra.Command, s *store.Store) bool {
 		}
 
 		// all good here! run the command!
-		projectPath := s.GetProjects()[projectName]
 		runCmd(commandMap[projectName][commandName].CmdStr, projectPath)
 
 		// return without running root command.
