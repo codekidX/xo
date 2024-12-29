@@ -12,6 +12,17 @@ func (xo *XOCmd) InfoCmd() *cobra.Command {
 		Use:   "!",
 		Short: "show info about the xo project",
 		Run: func(cmd *cobra.Command, args []string) {
+			if len(args) == 0 {
+				// this means that project name is not mentioned
+				commands := xo.store.GetCommands()
+
+				// loop and display all project details
+				for project, commandMap := range commands {
+					display.ProjectInfo(project, commandMap)
+				}
+
+				return
+			}
 			projectName := args[0]
 			pathMap := xo.store.GetProjects()
 			if _, ok := pathMap[projectName]; !ok {
