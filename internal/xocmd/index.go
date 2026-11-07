@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"xo/internal/store"
 	"xo/internal/sys"
+	"xo/internal/tui"
 
 	"github.com/spf13/cobra"
 )
@@ -24,6 +25,11 @@ func Run() error {
 	root := &cobra.Command{
 		Use:   "xo",
 		Short: "xo is aliasing on steroids",
+		Run: func(cmd *cobra.Command, args []string) {
+			if err := tui.Launch(xoapp.store); err != nil {
+				fmt.Fprintln(os.Stderr, "error:", err)
+			}
+		},
 	}
 
 	root.AddCommand(xoapp.InitCmd())
@@ -43,18 +49,35 @@ func Run() error {
 		return nil
 	}
 
+	root.CompletionOptions.DisableDefaultCmd = true
 	return root.Execute()
 }
 
+// checkAndRunProjectCommand checks if the command provided is one of the project
+// name. This makes using this app a lot easier because now you can do this:
+//
+// xo boomerang run
+//
+// this will run the boomerang project.
+// It returns `true` if it encountered command which is one of xo project.
 func checkAndRunProjectCommand(root *cobra.Command, s *store.Store) bool {
-	commandMap := s.GetCommands()
+	projectNameOrCommand, _, err := root.Find(os.Args[1:])
 
-	// check if project exists
-	if len(os.Args) > 1 {
+	if err != nil && projectNameOrCommand.Use == root.Use {
+		// a command must have 1=project_name, 2=command_name, we can ignore 0 because it will be the
+		// bin_name=xo because cobra is not handling these args for us!
+		if len(os.Args) < 2 {
+			fmt.Println("not enough argument to run xo command.")
+			return true
+		}
+
 		projectName := os.Args[1]
 
+		// check if project exists in workspace
+		commandMap := s.GetCommands()
 		if _, ok := commandMap[projectName]; !ok {
-			return false
+			fmt.Printf("no such project: %s\n", projectName)
+			return true
 		}
 
 		projectPath := s.GetProjects()[projectName]
@@ -75,8 +98,9 @@ func checkAndRunProjectCommand(root *cobra.Command, s *store.Store) bool {
 
 		commandName := os.Args[2]
 
+		// check if command exists in project
 		if _, ok := commandMap[projectName][commandName]; !ok {
-			fmt.Println("no command named:", commandName, "in project:", projectName)
+			fmt.Printf("no such command in this project: %s\n", commandName)
 			return true
 		}
 
@@ -96,8 +120,8 @@ func checkAndRunProjectCommand(root *cobra.Command, s *store.Store) bool {
 }
 
 func runCmd(cmd string, inDirectory string) {
-	if inDirectory != "" {
-		os.Chdir(inDirectory)
+	if err := os.Chdir(inDirectory); err != nil {
+		fmt.Println("error: ", err.Error())
 		return
 	}
 
