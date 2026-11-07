@@ -31,6 +31,10 @@ func Run() error {
 	root.AddCommand(xoapp.InfoCmd())
 	root.AddCommand(xoapp.AtCmd())
 	root.AddCommand(xoapp.ImportCmd())
+	root.AddCommand(xoapp.AddCmd())
+	root.AddCommand(xoapp.SetupCmd())
+	root.AddCommand(xoapp.ExportCmd())
+	root.AddCommand(xoapp.AddSetupCmd())
 
 	isProjectCommand := checkAndRunProjectCommand(root, xoapp.store)
 
