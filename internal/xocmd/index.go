@@ -4,8 +4,9 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"strings"
+	"path/filepath"
 	"xo/internal/store"
+	"xo/internal/sys"
 
 	"github.com/spf13/cobra"
 )
@@ -15,75 +16,73 @@ type XOCmd struct {
 }
 
 func Run() error {
+	xoapp := &XOCmd{store: store.New()}
+
+	// Auto-sync the workspace with on-disk project files
+	xoapp.store.Sync()
+
 	root := &cobra.Command{
 		Use:   "xo",
 		Short: "xo is aliasing on steroids",
 	}
-
-	xoapp := &XOCmd{store: store.New()}
 
 	root.AddCommand(xoapp.InitCmd())
 	root.AddCommand(xoapp.RemoveCmd())
 	root.AddCommand(xoapp.InfoCmd())
 	root.AddCommand(xoapp.AtCmd())
 	root.AddCommand(xoapp.ImportCmd())
-	root.AddCommand(xoapp.UpdateCmd())
 
 	isProjectCommand := checkAndRunProjectCommand(root, xoapp.store)
 
 	if isProjectCommand {
+		// skip cobra execution
 		return nil
 	}
 
-	root.CompletionOptions.DisableDefaultCmd = true
 	return root.Execute()
 }
 
-// checkAndRunProjectCommand checks if the command provided is one of the project
-// name. This makes using this app a lot easier because now you can do this:
-//
-// xo boomerang run
-//
-// this will run the boomerang project.
-// It returns `true` if it encountered command which is one of xo project.
 func checkAndRunProjectCommand(root *cobra.Command, s *store.Store) bool {
-	projectNameOrCommand, _, err := root.Find(os.Args[1:])
+	commandMap := s.GetCommands()
 
-	if err != nil && projectNameOrCommand.Use == root.Use {
-		// a command must have 1=project_name, 2=command_name, we can ignore 0 because it will be the
-		// bin_name=xo because cobra is not handling these args for us!
-		if len(os.Args) < 2 {
-			fmt.Println("not enough argument to run xo command.")
-			return true
-		}
-
+	// check if project exists
+	if len(os.Args) > 1 {
 		projectName := os.Args[1]
 
-		// check if project exists in workspace
-		commandMap := s.GetCommands()
 		if _, ok := commandMap[projectName]; !ok {
-			fmt.Printf("no such project: %s\n", projectName)
-			return true
+			return false
 		}
 
 		projectPath := s.GetProjects()[projectName]
 
 		if len(os.Args) == 2 {
 			// this means that only project name is mentioned
-			fmt.Print(projectPath)
+			shell := sys.DefaultShell()
+			c := exec.Command(shell)
+			c.Dir = projectPath
+			c.Stdin = os.Stdin
+			c.Stdout = os.Stdout
+			c.Stderr = os.Stderr
+			if err := c.Run(); err != nil {
+				fmt.Fprintln(os.Stderr, "Shell exited with error:", err)
+			}
 			return true
 		}
 
 		commandName := os.Args[2]
 
-		// check if command exists in project
 		if _, ok := commandMap[projectName][commandName]; !ok {
-			fmt.Printf("no such command in this project: %s\n", commandName)
+			fmt.Println("no command named:", commandName, "in project:", projectName)
 			return true
 		}
 
 		// all good here! run the command!
-		runCmd(commandMap[projectName][commandName].CmdStr, projectPath)
+		targetCommand := commandMap[projectName][commandName]
+		if targetCommand.WorkDir != "" {
+			runCmd(targetCommand.CmdStr, filepath.Join(projectPath, targetCommand.WorkDir))
+		} else {
+			runCmd(targetCommand.CmdStr, projectPath)
+		}
 
 		// return without running root command.
 		return true
@@ -93,22 +92,17 @@ func checkAndRunProjectCommand(root *cobra.Command, s *store.Store) bool {
 }
 
 func runCmd(cmd string, inDirectory string) {
-	if err := os.Chdir(inDirectory); err != nil {
-		fmt.Println("error: ", err.Error())
+	if inDirectory != "" {
+		os.Chdir(inDirectory)
 		return
 	}
 
-	// if it contains multiple commands -- split it!
-	splittedCmds := strings.Split(cmd, "&&")
-	for _, commandStr := range splittedCmds {
-		cmdArr := strings.Split(strings.TrimSpace(commandStr), " ")
-		bin := cmdArr[0]
+	cmdHandle := sys.ShellCommand(cmd)
+	cmdHandle.Stdin = os.Stdin
+	cmdHandle.Stdout = os.Stdout
+	cmdHandle.Stderr = os.Stderr
 
-		cmdHandle := exec.Command(bin, cmdArr[1:]...)
-		stdout, _ := cmdHandle.Output()
-
-		// TODO :: we need to know when error happens and paint it RED!
-
-		fmt.Println(string(stdout))
+	if err := cmdHandle.Run(); err != nil {
+		fmt.Printf("Command failed: %v\n", err)
 	}
 }
