@@ -4,8 +4,10 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"strings"
+	"path/filepath"
 	"xo/internal/store"
+	"xo/internal/sys"
+	"xo/internal/tui"
 
 	"github.com/spf13/cobra"
 )
@@ -15,23 +17,35 @@ type XOCmd struct {
 }
 
 func Run() error {
+	xoapp := &XOCmd{store: store.New()}
+
+	// Auto-sync the workspace with on-disk project files
+	xoapp.store.Sync()
+
 	root := &cobra.Command{
 		Use:   "xo",
 		Short: "xo is aliasing on steroids",
+		Run: func(cmd *cobra.Command, args []string) {
+			if err := tui.Launch(xoapp.store); err != nil {
+				fmt.Fprintln(os.Stderr, "error:", err)
+			}
+		},
 	}
-
-	xoapp := &XOCmd{store: store.New()}
 
 	root.AddCommand(xoapp.InitCmd())
 	root.AddCommand(xoapp.RemoveCmd())
 	root.AddCommand(xoapp.InfoCmd())
 	root.AddCommand(xoapp.AtCmd())
 	root.AddCommand(xoapp.ImportCmd())
-	root.AddCommand(xoapp.UpdateCmd())
+	root.AddCommand(xoapp.AddCmd())
+	root.AddCommand(xoapp.SetupCmd())
+	root.AddCommand(xoapp.ExportCmd())
+	root.AddCommand(xoapp.AddSetupCmd())
 
 	isProjectCommand := checkAndRunProjectCommand(root, xoapp.store)
 
 	if isProjectCommand {
+		// skip cobra execution
 		return nil
 	}
 
@@ -70,7 +84,15 @@ func checkAndRunProjectCommand(root *cobra.Command, s *store.Store) bool {
 
 		if len(os.Args) == 2 {
 			// this means that only project name is mentioned
-			fmt.Print(projectPath)
+			shell := sys.DefaultShell()
+			c := exec.Command(shell)
+			c.Dir = projectPath
+			c.Stdin = os.Stdin
+			c.Stdout = os.Stdout
+			c.Stderr = os.Stderr
+			if err := c.Run(); err != nil {
+				fmt.Fprintln(os.Stderr, "Shell exited with error:", err)
+			}
 			return true
 		}
 
@@ -83,7 +105,12 @@ func checkAndRunProjectCommand(root *cobra.Command, s *store.Store) bool {
 		}
 
 		// all good here! run the command!
-		runCmd(commandMap[projectName][commandName].CmdStr, projectPath)
+		targetCommand := commandMap[projectName][commandName]
+		if targetCommand.WorkDir != "" {
+			runCmd(targetCommand.CmdStr, filepath.Join(projectPath, targetCommand.WorkDir))
+		} else {
+			runCmd(targetCommand.CmdStr, projectPath)
+		}
 
 		// return without running root command.
 		return true
@@ -98,17 +125,12 @@ func runCmd(cmd string, inDirectory string) {
 		return
 	}
 
-	// if it contains multiple commands -- split it!
-	splittedCmds := strings.Split(cmd, "&&")
-	for _, commandStr := range splittedCmds {
-		cmdArr := strings.Split(strings.TrimSpace(commandStr), " ")
-		bin := cmdArr[0]
+	cmdHandle := sys.ShellCommand(cmd)
+	cmdHandle.Stdin = os.Stdin
+	cmdHandle.Stdout = os.Stdout
+	cmdHandle.Stderr = os.Stderr
 
-		cmdHandle := exec.Command(bin, cmdArr[1:]...)
-		stdout, _ := cmdHandle.Output()
-
-		// TODO :: we need to know when error happens and paint it RED!
-
-		fmt.Println(string(stdout))
+	if err := cmdHandle.Run(); err != nil {
+		fmt.Printf("Command failed: %v\n", err)
 	}
 }

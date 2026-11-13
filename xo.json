@@ -14,7 +14,7 @@
         },
         {
             "name": "pack",
-            "cmd": "go build -o xo main.go",
+            "cmd": "./pack.sh",
             "help": "pack xo binary for release"
         }
     ]

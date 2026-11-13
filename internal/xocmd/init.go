@@ -2,6 +2,7 @@ package xocmd
 
 import (
 	"os"
+	"xo/internal/utils"
 
 	"github.com/spf13/cobra"
 )
@@ -14,7 +15,7 @@ func (xo *XOCmd) InitCmd() *cobra.Command {
 		Run: func(cmd *cobra.Command, args []string) {
 			p, _ := os.Getwd()
 			if err := xo.store.CreateXOFile(p); err != nil {
-				panic(err)
+				utils.Fatal(err)
 			}
 		},
 	}

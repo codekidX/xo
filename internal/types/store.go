@@ -3,6 +3,7 @@ package types
 type Command struct {
 	Name    string   `json:"name"`
 	CmdStr  string   `json:"cmd"`
+	WorkDir string   `json:"work_dir"`
 	EnvVars []string `json:"env"`
 	Help    string   `json:"help"`
 }
@@ -22,11 +23,30 @@ type WorkspaceFile struct {
 
 	// Commands has key=project_name, value=map[command_name]Command
 	Commands map[string]CommandMap `json:"cmds"`
+
+	// GitURLs has key=project_name, value=git_url
+	GitURLs map[string]string `json:"git_urls,omitempty"`
+
+	// Setup has key=os_name, value=array_of_commands
+	Setup map[string][]string `json:"setup,omitempty"`
+}
+
+type SharedWorkspace struct {
+	Name         string              `json:"name"`
+	Setup        map[string][]string `json:"setup,omitempty"`
+	Repositories []SharedRepository  `json:"repositories"`
+}
+
+type SharedRepository struct {
+	Name string `json:"name"`
+	Git  string `json:"git"`
+	Path string `json:"path"`
 }
 
 // XOFile is xo.json file which can be created in the project root folder
 // for easy import of a xo project commands
 type XOFile struct {
 	Name     string    `json:"name"`
+	GitURL   string    `json:"git"`
 	Commands []Command `json:"commands"`
 }

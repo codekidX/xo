@@ -1,0 +1,9 @@
+# Operating System
+.DS_Store
+
+# Binaries
+/xo
+/xo-*
+
+# Archives
+*.zip
